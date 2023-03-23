@@ -2,16 +2,14 @@ package me.aisuneko.httpshare
 
 import android.content.Context
 import android.net.Uri
-import android.security.KeyChain.getCertificateChain
-import android.security.KeyChain.getPrivateKey
 import android.util.Log
 import me.aisuneko.httpshare.a.NanoHTTPD
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import java.io.*
+import me.aisuneko.httpshare.a.NoSSLv3SocketFactory
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.security.KeyStore
-import java.security.PrivateKey
-import java.security.SecureRandom
-import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.*
@@ -37,62 +35,25 @@ class Server(uri: Uri, name: String, var context: Context) : NanoHTTPD(HOST, POR
     }
 
     override fun start() {
-        val cf: CertificateFactory = CertificateFactory.getInstance("X.509")
-// From https://www.washington.edu/itconnect/security/ca/load-der.crt
-        val caInput: InputStream = BufferedInputStream(context.assets.open("cert.pem"))
-        val ca: Certificate
-        caInput.use { caInput ->
-            ca = cf.generateCertificate(caInput)
-            Log.e("Certificate", "ca=" + (ca as X509Certificate).subjectDN)
-        }
-// Create a KeyStore containing our trusted CAs
+        val inputStream2: InputStream = context.assets.open("mycert.crt")
+            val certificateFactory: CertificateFactory = CertificateFactory.getInstance("X.509")
+            val certificate: X509Certificate = certificateFactory.generateCertificate(inputStream2) as X509Certificate
 
-        val keyStoreStream: InputStream = context.resources.openRawResource(R.raw.keystore)
-        val keyStorePassword = "123456".toCharArray()
-        val keyStore = KeyStore.getInstance("PKCS12", BouncyCastleProvider.PROVIDER_NAME)
-        keyStore.load(keyStoreStream, keyStorePassword)
+            // Create a keystore and store the certificate in it
+            val keyStore: KeyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+            keyStore.load(context.resources.openRawResource(R.raw.keystore), "123456".toCharArray())
+            keyStore.setCertificateEntry("mycert", certificate)
 
-        val privateKey: PrivateKey? = getPrivateKey(context, "alias")
-        val chain: Array<out X509Certificate>? = getCertificateChain(context, "alias")
-        keyStore.setEntry(
-            "alias", KeyStore.PrivateKeyEntry(privateKey, chain), KeyStore.PasswordProtection(
-                keyStorePassword
-            )
-        )
-        keyStore.setCertificateEntry("ca", ca)
+            // Create a KeyManagerFactory and initialize it with the keystore
+            val keyManagerFactory: KeyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+            keyManagerFactory.init(keyStore,  "123456".toCharArray())
 
-        keyStore.setEntry(
-            "alias",
-            KeyStore.PrivateKeyEntry(privateKey, chain),
-            KeyStore.PasswordProtection(keyStorePassword)
-        )
+            // Create an SSLContext and initialize it with the KeyManagerFactory
+            val sslContext: SSLContext = SSLContext.getInstance("TLS")
+            sslContext.init(keyManagerFactory.keyManagers, null, null)
 
-        val keyManagerFactory =
-            KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
-        keyManagerFactory.init(keyStore, keyStorePassword)
-        val trustManagerFactory =
-            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-        trustManagerFactory.init(keyStore)
-
-
-// Create a TrustManager that trusts the CAs in our KeyStore
-        val tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm()
-        val tmf = TrustManagerFactory.getInstance(tmfAlgorithm)
-        tmf.init(keyStore)
-
-
-// Create an SSLContext that uses our TrustManager
-        val context = SSLContext.getInstance("TLS")
-        context.init(
-            keyManagerFactory.keyManagers,
-            trustManagerFactory.trustManagers,
-            SecureRandom()
-        )
-
-//        context.init(null, tmf.trustManagers, null)
-        makeSecure(context.serverSocketFactory, arrayOf<String>("TLSv1.2", "TLSv1.3"))
-//        makeSecure(makeSSLSocketFactory(keyStore,keyManagerFactory), arrayOf<String>("TLSv1.2","TLSv1.3"))
-
+            // Create a ServerSocketFactory using the SSLContext
+        makeSecure(sslContext.serverSocketFactory, arrayOf(sslContext.protocol))
         super.start()
         inputStream = applicationContext.contentResolver.openInputStream(link)
 

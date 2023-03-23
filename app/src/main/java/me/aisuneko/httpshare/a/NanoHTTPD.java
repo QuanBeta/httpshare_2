@@ -190,7 +190,7 @@ public abstract class NanoHTTPD {
      */
     public void start() throws IOException {
         this.myServerSocket = this.getServerSocketFactory().create();
-        this.myServerSocket.setReuseAddress(true);
+//        this.myServerSocket.setReuseAddress(true);
 //        myServerSocket = new ServerSocket();
         myServerSocket.bind((hostname != null) ? new InetSocketAddress(hostname, myPort) : new InetSocketAddress(myPort));
 
@@ -1477,11 +1477,11 @@ public abstract class NanoHTTPD {
         public ServerSocket create() throws IOException {
             SSLServerSocket ss = null;
             ss = (SSLServerSocket) this.sslServerSocketFactory.createServerSocket();
-            if (this.sslProtocols != null) {
-                ss.setEnabledProtocols(this.sslProtocols);
-            } else {
-                ss.setEnabledProtocols(ss.getSupportedProtocols());
-            }
+//            if (this.sslProtocols != null) {
+//                ss.setEnabledProtocols(this.sslProtocols);
+//            } else {
+//                ss.setEnabledProtocols(ss.getSupportedProtocols());
+//            }
             ss.setUseClientMode(false);
             ss.setWantClientAuth(false);
             ss.setNeedClientAuth(false);
@@ -1499,6 +1499,7 @@ public abstract class NanoHTTPD {
     public void makeSecure(SSLServerSocketFactory sslServerSocketFactory, String[] sslProtocols) {
         this.serverSocketFactory = new SecureServerSocketFactory(sslServerSocketFactory, sslProtocols);
     }
+
 
     public static class DefaultServerSocketFactory implements ServerSocketFactory {
 
