@@ -4,15 +4,14 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import me.aisuneko.httpshare.a.NanoHTTPD
-import me.aisuneko.httpshare.a.NoSSLv3SocketFactory
-import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.InputStream
+import java.io.*
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import javax.net.ssl.*
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 
 private const val HOST = "0.0.0.0"
@@ -24,6 +23,7 @@ class Server(uri: Uri, name: String, var context: Context) : NanoHTTPD(HOST, POR
     private var applicationContext = context
     private var link = uri
     private var fileName = name
+    private var TAG = "Server"
 
     //    private val timestamp =
 //        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-kkmmss"))
@@ -31,28 +31,32 @@ class Server(uri: Uri, name: String, var context: Context) : NanoHTTPD(HOST, POR
 
     //    private val name = link.lastPathSegment
     override fun serve(session: IHTTPSession?): Response {
+        Log.e(TAG, "serve:::")
         return Response(Response.Status.OK, mime, FileInputStream(tempFile))
     }
 
     override fun start() {
-        val inputStream2: InputStream = context.assets.open("mycert.crt")
-            val certificateFactory: CertificateFactory = CertificateFactory.getInstance("X.509")
-            val certificate: X509Certificate = certificateFactory.generateCertificate(inputStream2) as X509Certificate
+        Log.e(TAG, "start::: ")
+        val inputStream2: InputStream = context.assets.open("cert.pem")
+        val certificateFactory: CertificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate: X509Certificate =
+            certificateFactory.generateCertificate(inputStream2) as X509Certificate
 
-            // Create a keystore and store the certificate in it
-            val keyStore: KeyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-            keyStore.load(context.resources.openRawResource(R.raw.keystore), "123456".toCharArray())
-            keyStore.setCertificateEntry("mycert", certificate)
+        // Create a keystore and store the certificate in it
+        val keyStore: KeyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+        keyStore.load(context.resources.openRawResource(R.raw.keystore), "123456".toCharArray())
+        keyStore.setCertificateEntry("mycert", certificate)
 
-            // Create a KeyManagerFactory and initialize it with the keystore
-            val keyManagerFactory: KeyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
-            keyManagerFactory.init(keyStore,  "123456".toCharArray())
+        // Create a KeyManagerFactory and initialize it with the keystore
+        val keyManagerFactory: KeyManagerFactory =
+            KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+        keyManagerFactory.init(keyStore, "123456".toCharArray())
 
-            // Create an SSLContext and initialize it with the KeyManagerFactory
-            val sslContext: SSLContext = SSLContext.getInstance("TLS")
-            sslContext.init(keyManagerFactory.keyManagers, null, null)
+        // Create an SSLContext and initialize it with the KeyManagerFactory
+        val sslContext: SSLContext = SSLContext.getInstance("TLS")
+        sslContext.init(keyManagerFactory.keyManagers, null, null)
 
-            // Create a ServerSocketFactory using the SSLContext
+        // Create a ServerSocketFactory using the SSLContext
         makeSecure(sslContext.serverSocketFactory, arrayOf(sslContext.protocol))
         super.start()
         inputStream = applicationContext.contentResolver.openInputStream(link)
@@ -72,6 +76,7 @@ class Server(uri: Uri, name: String, var context: Context) : NanoHTTPD(HOST, POR
     }
 
     override fun stop() {
+        Log.e(TAG, "stop::: ")
         super.stop()
         if (tempFile?.exists() == true) {
             tempFile?.delete()

@@ -1,5 +1,7 @@
 package me.aisuneko.httpshare.a;
 
+import android.util.Log;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
@@ -189,9 +191,10 @@ public abstract class NanoHTTPD {
      * @throws IOException if the socket is in use.
      */
     public void start() throws IOException {
-        this.myServerSocket = this.getServerSocketFactory().create();
+//        this.myServerSocket = this.getServerSocketFactory().create();
 //        this.myServerSocket.setReuseAddress(true);
-//        myServerSocket = new ServerSocket();
+        myServerSocket = new ServerSocket();
+
         myServerSocket.bind((hostname != null) ? new InetSocketAddress(hostname, myPort) : new InetSocketAddress(myPort));
 
         myThread = new Thread(new Runnable() {
@@ -211,6 +214,7 @@ public abstract class NanoHTTPD {
                                     outputStream = finalAccept.getOutputStream();
                                     TempFileManager tempFileManager = tempFileManagerFactory.create();
                                     HTTPSession session = new HTTPSession(tempFileManager, inputStream, outputStream, finalAccept.getInetAddress());
+
                                     while (!finalAccept.isClosed()) {
                                         session.execute();
                                     }
@@ -252,6 +256,13 @@ public abstract class NanoHTTPD {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public long parseRangeHeader(String rangeHeader) {
+        // Example range header format: bytes=12345-
+        String[] rangeParts = rangeHeader.split("=")[1].split("-");
+        long startPos = Long.parseLong(rangeParts[0]);
+        return startPos;
     }
 
     /**
@@ -643,6 +654,7 @@ public abstract class NanoHTTPD {
          * Sends given response to the socket.
          */
         protected void send(OutputStream outputStream) {
+            Log.e("Server", "send::: ");
             String mime = mimeType;
             SimpleDateFormat gmtFrmt = new SimpleDateFormat("E, d MMM yyyy HH:mm:ss 'GMT'", Locale.US);
             gmtFrmt.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -651,11 +663,37 @@ public abstract class NanoHTTPD {
                 if (status == null) {
                     throw new Error("sendResponse(): Status can't be null.");
                 }
+                long fileLength = data.available();
+                long start = 0, end = fileLength - 1;
+                String rangeHeader = getHeader("Range");
+                if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                    String[] rangeValues = rangeHeader.substring(6).split("-");
+                    try {
+                        if (rangeValues.length == 1) {
+                            start = Long.parseLong(rangeValues[0]);
+                            end = fileLength - 1;
+                        } else {
+                            start = Long.parseLong(rangeValues[0]);
+                            end = Long.parseLong(rangeValues[1]);
+                        }
+                    } catch (NumberFormatException e) {
+                        // Handle invalid range header values
+                        e.printStackTrace();
+                    }
+                }
+                long contentLength = end - start + 1;
                 PrintWriter pw = new PrintWriter(outputStream);
                 pw.print("HTTP/1.1 " + status.getDescription() + " \r\n");
-
                 if (mime != null) {
                     pw.print("Content-Type: " + mime + "\r\n");
+//                    pw.print("HTTP/1.1 206 Partial Content\r\n");
+                    pw.print("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+                    pw.print("Pragma: no-cache\r\n");
+                    pw.print("Expires: 0\r\n");
+//                    pw.print("Content-Type: audio/mpeg\r\n");
+                    pw.print("Accept-Ranges: bytes\r\n");
+                    pw.print(String.format("Content-Range: bytes %d-%d/%d\r\n", start, end, fileLength));
+                    pw.print(String.format("Content-Length: %d\r\n", contentLength));
                 }
 
                 if (header == null || header.get("Date") == null) {
@@ -684,6 +722,7 @@ public abstract class NanoHTTPD {
                 safeClose(data);
             } catch (IOException ioe) {
                 // Couldn't write? No can do.
+                ioe.printStackTrace();
             }
         }
 
@@ -1497,6 +1536,7 @@ public abstract class NanoHTTPD {
     }
 
     public void makeSecure(SSLServerSocketFactory sslServerSocketFactory, String[] sslProtocols) {
+
         this.serverSocketFactory = new SecureServerSocketFactory(sslServerSocketFactory, sslProtocols);
     }
 
@@ -1531,6 +1571,7 @@ public abstract class NanoHTTPD {
             throw new IOException(e.getMessage());
         }
     }
+
     public static SSLServerSocketFactory makeSSLSocketFactory(KeyStore loadedKeyStore, KeyManagerFactory loadedKeyFactory) throws IOException {
         try {
             return makeSSLSocketFactory(loadedKeyStore, loadedKeyFactory.getKeyManagers());
