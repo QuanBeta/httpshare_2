@@ -14,6 +14,9 @@ import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_first.*
 import me.aisuneko.httpshare.databinding.ActivityMainBinding
 import java.io.IOException
+import java.security.cert.X509Certificate
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 const val PICK_CODE = 114
 
@@ -23,10 +26,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var webServer: Server? = null
     private var isServerOn = false
-//    private fun log(str: String) {
+
+    //    private fun log(str: String) {
 //        textview_first.text = textview_first.text.toString() + "\n" + str
 //    }
-    private fun closeServer(){
+    private fun closeServer() {
         if (this.webServer != null) {
             this.webServer?.closeAllConnections()
             this.webServer?.stop()
@@ -54,7 +58,8 @@ class MainActivity : AppCompatActivity() {
             if (!isServerOn) {
                 startActivityForResult(Intent.createChooser(intent, "Select a file"), PICK_CODE)
             } else {
-                val start_icon = this.resources.getIdentifier("@android:drawable/ic_media_play",null,null)
+                val start_icon =
+                    this.resources.getIdentifier("@android:drawable/ic_media_play", null, null)
                 fab.setImageResource(start_icon)
                 Snackbar.make(binding.root, "Server shutdown", Snackbar.LENGTH_LONG)
                     .setAnchorView(R.id.fab)
@@ -75,6 +80,29 @@ class MainActivity : AppCompatActivity() {
         val navController = findNavController(R.id.nav_host_fragment_content_main)
         return navController.navigateUp(appBarConfiguration)
                 || super.onSupportNavigateUp()
+    }
+
+    fun getCertificate(): Array<TrustManager> {
+        val trustAllCerts = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun checkClientTrusted(
+                    chain: Array<X509Certificate>,
+                    authType: String
+                ) {
+                }
+
+                override fun checkServerTrusted(
+                    chain: Array<X509Certificate>,
+                    authType: String
+                ) {
+                }
+
+                override fun getAcceptedIssuers(): Array<X509Certificate> {
+                    return emptyArray()
+                }
+            }
+        )
+        return trustAllCerts
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

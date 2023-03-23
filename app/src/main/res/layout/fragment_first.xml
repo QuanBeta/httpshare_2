@@ -12,6 +12,7 @@
         android:padding="16dp">
 
         <TextView
+            android:textIsSelectable="true"
             android:id="@+id/textview_first"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
